@@ -51,10 +51,12 @@ def download_tracks_for_year(year):
                 subprocess.run(
                     [
                         "yt-dlp",
-                        "--extractor-args", "youtube:player_client=android",
+                        "--extractor-args", "youtube:player_client=android,ios",
+                        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                        "--add-header", "Accept-Language:ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
                         "--ffmpeg-location", FFMPEG_PATH,
-                        "--sleep-interval", "1",        # <-- пауза 1 сек между запросами
-                        "--max-sleep-interval", "3",     # <-- максимум 3 сек
+                        "--sleep-interval", "1",
+                        "--max-sleep-interval", "3",
                         "-x",
                         "--audio-format", "mp3",
                         "--audio-quality", "0",
