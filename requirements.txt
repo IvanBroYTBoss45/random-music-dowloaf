@@ -1,1 +1,3 @@
-# placeholder
+aiogram
+static-ffmpeg
+yt-dlp
