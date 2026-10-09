@@ -16,7 +16,7 @@ from yt_dlp import YoutubeDL
 # Инициализируем ffmpeg при старте
 static_ffmpeg.add_paths()
 
-# Токен твоего бота (вставь сюда свой)
+# Токен твоего бота (замени на свой)
 TOKEN = "ТВОЙ_ТОКЕН_БОТА"
 
 logging.basicConfig(level=logging.INFO)
@@ -26,7 +26,7 @@ dp = Dispatcher()
 DOWNLOAD_DIR = Path("downloads")
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
-# Инициализация кэш-базы SQLite (как ты и хотел, чтобы не качать дубли)
+# Инициализация кэш-базы SQLite
 def init_db():
     with sq.connect("music_cache.db") as con:
         cur = con.cursor()
@@ -47,9 +47,8 @@ def get_ytdl_opts(year):
         'format': 'bestaudio/best',
         'outtmpl': str(DOWNLOAD_DIR / f'%(title)s_{year}.%(ext)s'),
         'noplaylist': True,
-        'playlistend': 20,  # Забираем строго 20 треков из результатов поиска
+        'playlistend': 20,  # Строго 20 треков за раз
         'quiet': True,
-        # Зашиваем обход блокировок (User-Agent и Клиенты)
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
         },
@@ -58,7 +57,6 @@ def get_ytdl_opts(year):
                 'player_client': ['web', 'ios'],
             }
         },
-        # Конвертация в MP3 через static-ffmpeg
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -66,9 +64,10 @@ def get_ytdl_opts(year):
         }],
     }
 
-# Хэндлер на команду /start с инлайн-кнопкой
+# Хэндлер на команду /start с ИСПРАВЛЕННОЙ инлайн-клавиатурой
 @dp.message(CommandStart())
 async def cmd_start(message: Message):
+    # Тут всё зафиксировано, callback_data на месте
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Запустить скачивание по годам 🚀", callback_query_data="start_download")]
     ])
@@ -86,19 +85,15 @@ async def process_download(callback: CallbackQuery):
     
     await bot.send_message(chat_id, "⚙️ Начинаю сбор данных. Погнали плясать...")
 
-    # Идём циклом по годам (с 2000 по 2026 включительно)
     for year in range(2000, 2027):
         await bot.send_message(chat_id, f"📅 Разбираю {year} год. Ищу 20 лучших треков...")
         
-        # Поиск треков по маске на YouTube
         search_query = f"ytsearch20:лучшие песни {year}"
         opts = get_ytdl_opts(year)
         
-        # Запускаем скачивание в отдельном потоке, чтобы Asyncio не блокировался
         loop = asyncio.get_event_loop()
         try:
             with YoutubeDL(opts) as ydl:
-                # Извлекаем инфу и качаем файлы
                 info = await loop.run_in_executor(None, lambda: ydl.extract_info(search_query, download=True))
                 
                 if 'entries' in info:
@@ -115,29 +110,24 @@ async def process_download(callback: CallbackQuery):
                             cur.execute("SELECT video_id FROM cached_tracks WHERE video_id = ?", (video_id,))
                             if cur.fetchone():
                                 logging.info(f"Трек {title} уже отправлялся, скип.")
-                                continue # Если качали — скипаем, идём дальше
+                                continue
                         
-                        # yt-dlp сохраняет с расширением mp3 после постпроцессинга
                         expected_file = DOWNLOAD_DIR / f"{title}_{year}.mp3"
                         
-                        # Если файл успешно скачался на диск
                         if expected_file.exists():
-                            # Отправляем нахуй в телегу юзеру
                             await bot.send_audio(
                                 chat_id=chat_id,
                                 audio=FSInputFile(str(expected_file)),
                                 caption=f"🎵 {title}\n📅 Год: {year}"
                             )
                             
-                            # Пишем в кэш-базу, чтобы больше не трогать этот видос
                             with sq.connect("music_cache.db") as con:
                                 cur = con.cursor()
                                 cur.execute("INSERT OR IGNORE INTO cached_tracks VALUES (?, ?, ?)", (video_id, year, title))
                                 con.commit()
                             
-                            # Моментально стираем из локальной папки, очищая RAM и диск
                             os.remove(expected_file)
-                            await asyncio.sleep(0.5) # Микропауза для стабильности лимитов ТГ
+                            await asyncio.sleep(0.5)
                             
         except Exception as e:
             logging.error(f"Ошибка на {year} году: {e}")
